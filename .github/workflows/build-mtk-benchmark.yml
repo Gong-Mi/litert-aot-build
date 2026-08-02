@@ -21,6 +21,8 @@ jobs:
           sudo ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
           # TF 2.8 WORKSPACE needs bazel 5.x (bazel 6 removed @bazel_tools//platforms)
           echo "USE_BAZEL_VERSION=5.4.1" >> $GITHUB_ENV
+          # TF python_configure needs numpy
+          python3 -m pip install --user numpy 2>&1 | tail -2 || sudo pip3 install numpy 2>&1 | tail -2
           bazel --version || echo "bazelisk will use USE_BAZEL_VERSION"
 
       - name: Clone MTK tflite-neuron-delegate
