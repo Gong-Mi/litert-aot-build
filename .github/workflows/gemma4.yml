@@ -19,7 +19,7 @@ jobs:
       - name: Install litert CLI + SDKs
         run: |
           pip install -U litert-cli-nightly ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly
-          litert --version
+          litert --help 2>&1 | head -40
           echo "=== quantize recipes ==="
           litert quantize --help 2>&1 | head -80 || true
 
