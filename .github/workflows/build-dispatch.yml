@@ -56,13 +56,13 @@ jobs:
             //litert/vendors/mediatek/dispatch:dispatch_api_so \
             2>&1 | tail -30 || true
           echo "=== find outputs ==="
-          find bazel-bin -name "libLiteRt.so" -o -name "libLiteRtDispatch_MediaTek.so" 2>/dev/null | head -10
-          # Also search the whole bazel output tree (cc_shared_library may put it elsewhere)
-          find bazel-out -name "libLiteRt.so" 2>/dev/null | head -5
+          ls -la bazel-bin/litert/c/litert_runtime_c_api_so/ 2>/dev/null || echo "no dir bazel-bin/litert/c/litert_runtime_c_api_so"
+          # bazel-bin is a symlink; use find -L to follow it
+          find -L bazel-bin -name "libLiteRt.so" 2>/dev/null | head -5
           # Collect everything into a staging dir
           mkdir -p /tmp/out
-          find bazel-bin bazel-out -name "libLiteRt.so" -exec cp {} /tmp/out/ \; 2>/dev/null
-          find bazel-bin -name "libLiteRtDispatch_MediaTek.so" -exec cp {} /tmp/out/ \; 2>/dev/null
+          find -L bazel-bin -name "libLiteRt.so" -exec cp {} /tmp/out/ \; 2>/dev/null
+          find -L bazel-bin -name "libLiteRtDispatch_MediaTek.so" -exec cp {} /tmp/out/ \; 2>/dev/null
           ls -la /tmp/out/
 
       - name: Upload dispatch lib
