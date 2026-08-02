@@ -56,13 +56,13 @@ jobs:
             //litert/vendors/mediatek/dispatch:dispatch_api_so \
             2>&1 | tail -30 || true
           echo "=== find outputs ==="
-          find bazel-bin -name "libLiteRt*.so" 2>/dev/null | head -10
+          find bazel-bin -name "libLiteRt.so" -o -name "libLiteRtDispatch_MediaTek.so" 2>/dev/null | head -10
 
       - name: Upload dispatch lib
         uses: actions/upload-artifact@v4
         with:
           name: litert-mtk-dispatch
           path: |
-            litert/bazel-bin/litert/c/libliteRt.so
-            litert/bazel-bin/litert/vendors/mediatek/dispatch/
+            litert/bazel-bin/litert/c/litert_runtime_c_api_so/libLiteRt.so
+            litert/bazel-bin/litert/vendors/mediatek/dispatch/libLiteRtDispatch_MediaTek.so
           if-no-files-found: warn
