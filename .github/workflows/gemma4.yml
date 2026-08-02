@@ -16,83 +16,48 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install tools
+      - name: Install litert-torch + SDKs
         run: |
-          pip install -U ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly
-          pip install -U mediapipe litert-torch-nightly huggingface_hub
-          python -c "import mediapipe.tasks.python.genai.converter as c; print('mediapipe converter OK')"
+          pip install -U ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly litert-torch-nightly
+          python -c "import litert_torch; print('litert_torch OK')"
+          python -m litert_torch.generative.export_hf --help 2>&1 | head -50 || true
 
-      - name: Download gemma4-e2b checkpoint (safetensors)
+      - name: Export gemma4-e2b - dynamic INT8 (default recipe)
         run: |
-          huggingface-cli download google/gemma-4-E2B --local-dir ./ckpt 2>&1 | tail -3 || \
-          python -c "
-          from huggingface_hub import snapshot_download
-          p = snapshot_download('google/gemma-4-E2B', local_dir='./ckpt')
-          print('downloaded to', p)
-          "
-          ls -la ./ckpt/ | head -20
+          python -m litert_torch.generative.export_hf \
+            --model google/gemma-4-E2B \
+            --output_dir ./out/dynamic_int8 \
+            --quantization_recipe dynamic_wi8_afp32 \
+            --aot_soc_model MT6989 2>&1 | tail -25
+          echo "=== output ==="
+          find ./out/dynamic_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
-      - name: Convert with mediapipe converter - INT4 weight-only (official default)
+      - name: Export gemma4-e2b - weight-only INT8
         run: |
-          mkdir -p out
-          cat > convert_int4.py <<'EOF'
-          from mediapipe.tasks.python.genai import converter
-          config = converter.ConversionConfig(
-              input_ckpt="./ckpt",
-              ckpt_format="safetensors",
-              model_type="GEMMA_4_E2B",
-              backend="cpu",
-              quantize="weight_only_int4",
-              output_dir="./out/int4",
-          )
-          converter.convert_checkpoint(config)
-          print("INT4 convert done")
-          EOF
-          python convert_int4.py 2>&1 | tail -10
-          ls -la out/int4/ 2>/dev/null | head
+          python -m litert_torch.generative.export_hf \
+            --model google/gemma-4-E2B \
+            --output_dir ./out/weight_only_int8 \
+            --quantization_recipe weight_only_wi8_afp32 \
+            --aot_soc_model MT6989 2>&1 | tail -25
+          echo "=== output ==="
+          find ./out/weight_only_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
-      - name: Convert - INT8 weight-only
+      - name: Export gemma4-e2b - weight-only INT4
         run: |
-          cat > convert_int8.py <<'EOF'
-          from mediapipe.tasks.python.genai import converter
-          config = converter.ConversionConfig(
-              input_ckpt="./ckpt",
-              ckpt_format="safetensors",
-              model_type="GEMMA_4_E2B",
-              backend="cpu",
-              quantize="weight_only_int8",
-              output_dir="./out/int8",
-          )
-          converter.convert_checkpoint(config)
-          print("INT8 convert done")
-          EOF
-          python convert_int8.py 2>&1 | tail -10
-          ls -la out/int8/ 2>/dev/null | head
+          python -m litert_torch.generative.export_hf \
+            --model google/gemma-4-E2B \
+            --output_dir ./out/weight_only_int4 \
+            --quantization_recipe weight_only_wi4_afp32 \
+            --aot_soc_model MT6989 2>&1 | tail -25
+          echo "=== output ==="
+          find ./out/weight_only_int4 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
-      - name: Convert - FP16 (no quant)
+      - name: Summary
         run: |
-          cat > convert_fp16.py <<'EOF'
-          from mediapipe.tasks.python.genai import converter
-          config = converter.ConversionConfig(
-              input_ckpt="./ckpt",
-              ckpt_format="safetensors",
-              model_type="GEMMA_4_E2B",
-              backend="cpu",
-              quantize=None,
-              output_dir="./out/fp16",
-          )
-          converter.convert_checkpoint(config)
-          print("FP16 convert done")
-          EOF
-          python convert_fp16.py 2>&1 | tail -10
-          ls -la out/fp16/ 2>/dev/null | head
-
-      - name: List all produced variants
-        run: |
-          echo "=== all outputs ==="
-          find out -type f -exec ls -la {} \; | head -40
-          echo "=== sizes ==="
-          du -sh out/*/
+          echo "=== all artifacts ==="
+          find out -type f \( -name "*.tflite" -o -name "*.litertlm" -o -name "*.task" -o -name "*.bin" \) -exec ls -la {} \; 2>/dev/null
+          echo "=== sizes by variant ==="
+          du -sh out/*/ 2>/dev/null
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
