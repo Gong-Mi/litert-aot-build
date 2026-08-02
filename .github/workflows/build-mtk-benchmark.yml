@@ -47,7 +47,7 @@ jobs:
           sudo mkdir -p /opt/android-sdk/platforms/android-28
           sudo mkdir -p /opt/android-sdk/build-tools/30.0.0
           # bazel 5 android_ndk_repository validates NDK has platforms/ (old layout)
-          sudo mkdir -p /opt/ndk/android-ndk-r27/platforms
+          sudo mkdir -p /opt/ndk/android-ndk-r27/platforms/android-28
           ls /opt/android-sdk/ 2>/dev/null || echo "sdk dir exists"
           export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
