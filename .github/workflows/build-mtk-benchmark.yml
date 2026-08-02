@@ -37,9 +37,11 @@ jobs:
 
       - name: Configure NDK + SDK
         run: |
-          sudo curl -sL -o ndk.zip "https://dl.google.com/android/repository/android-ndk-r27-linux.zip"
+          # NDK r21e: last NDK with gcc-4.9 toolchain layout that bazel5 android_ndk_repository expects
+          sudo curl -sL -o ndk.zip "https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip"
           sudo mkdir -p /opt/ndk
           sudo unzip -q ndk.zip -d /opt/ndk
+          ls /opt/ndk/android-ndk-r21e/toolchains/ 2>/dev/null | head -5
           # Minimal Android SDK (cmdline-tools only; WORKSPACE android_sdk_repository just needs the path)
           sudo mkdir -p /opt/android-sdk/cmdline-tools
           sudo curl -sL -o /tmp/cmdtools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
@@ -49,9 +51,9 @@ jobs:
           sudo mkdir -p /opt/android-sdk/platforms/android-28
           sudo mkdir -p /opt/android-sdk/build-tools/30.0.0
           # bazel 5 android_ndk_repository validates NDK has platforms/ (old layout)
-          sudo mkdir -p /opt/ndk/android-ndk-r27/platforms/android-28
+          sudo mkdir -p /opt/ndk/android-ndk-r21e/platforms/android-28
           ls /opt/android-sdk/ 2>/dev/null || echo "sdk dir exists"
-          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
+          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r21e
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           export ANDROID_HOME=/opt/android-sdk
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
@@ -61,7 +63,7 @@ jobs:
       - name: Build benchmark_model + neuron delegate (android_arm64)
         run: |
           cd mtkdelegate
-          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
+          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r21e
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           export ANDROID_HOME=/opt/android-sdk
           # Pre-fetch the TF 2.8 archive so bazel doesn't time out resolving it
