@@ -1,0 +1,52 @@
+name: build-tflite-headers
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/build-tflite-headers.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download TF 2.8 source (headers)
+        run: |
+          # Direct download of TF 2.8.0 source - much faster than bazel fetch
+          curl -sL -o /tmp/tf28.zip "https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.8.0.zip"
+          ls -la /tmp/tf28.zip
+          cd /tmp && unzip -q tf28.zip tensorflow-2.8.0/tensorflow/lite/\* tensorflow-2.8.0/third_party/flatbuffers/\* 2>/dev/null || true
+          echo "=== extracted ==="
+          find /tmp/tensorflow-2.8.0/tensorflow/lite -name "*.h" 2>/dev/null | wc -l
+
+      - name: Collect TFLite headers
+        run: |
+          TF=/tmp/tensorflow-2.8.0
+          mkdir -p /tmp/hdrs
+          # tensorflow/lite headers preserving structure
+          cd $TF
+          for d in tensorflow/lite tensorflow/compiler/mlir; do
+            find $d -name "*.h" 2>/dev/null | while read f; do
+              mkdir -p "/tmp/hdrs/$(dirname $f)"
+              cp "$f" "/tmp/hdrs/$f"
+            done
+          done
+          # flatbuffers headers from TF third_party
+          find third_party/flatbuffers -name "*.h" 2>/dev/null | while read f; do
+            rel=$(echo $f | sed 's|third_party/flatbuffers/include/||')
+            mkdir -p "/tmp/hdrs/$(dirname $rel)"
+            cp "$f" "/tmp/hdrs/$rel"
+          done
+          echo "=== collected ==="
+          find /tmp/hdrs -name "*.h" | wc -l
+          ls /tmp/hdrs/tensorflow/lite/ 2>/dev/null | head -12
+
+      - name: Upload headers
+        uses: actions/upload-artifact@v4
+        with:
+          name: tflite-headers
+          path: /tmp/hdrs/
+          if-no-files-found: warn
