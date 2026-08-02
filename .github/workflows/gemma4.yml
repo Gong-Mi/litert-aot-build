@@ -96,26 +96,11 @@ jobs:
             tfl="out/extracted/$v/model.tflite"
             if [ ! -f "$tfl" ]; then echo "!! $v: no tflite"; continue; fi
             echo "=== AOT compile $v for MT6989 ==="
-            python - <<EOF
-            import traceback
-            from ai_edge_litert.aot import aot_compile as aot_lib
-            from ai_edge_litert.aot.vendors.mediatek import target as mtk_target
-            target = mtk_target.Target(mtk_target.SocModel.MT6989)
-            print("Target:", target, "| NP:", target.recommended_np_version)
-            try:
-                compiled = aot_lib.aot_compile(
-                    "$tfl",
-                    target=target,
-                    keep_going=True,
-                )
-                print("AOT COMPILE OK")
-            except Exception:
-                traceback.print_exc()
-            EOF
-            ls -la out/extracted/$v/_compiled_models/ 2>/dev/null
+            python3 aot_compile_mediatek.py "$tfl" MT6989 || true
+            ls -la "out/extracted/$v/_compiled_models/" 2>/dev/null || true
           done
           echo "=== AOT results ==="
-          find out/extracted -name "*_compiled_models*" -o -name "*apply_plugin*" 2>/dev/null | head -20
+          find out/extracted -name "*apply_plugin*" 2>/dev/null | head -10
 
       - name: Verify AOT bytecode in outputs
         run: |
