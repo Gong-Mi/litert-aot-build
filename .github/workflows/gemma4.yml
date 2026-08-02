@@ -16,53 +16,86 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install litert CLI + SDKs
+      - name: Install tools
         run: |
-          pip install -U litert-cli-nightly ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly
-          litert --help 2>&1 | head -40
-          echo "=== quantize recipes ==="
-          litert quantize --help 2>&1 | head -80 || true
+          pip install -U ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly
+          pip install -U mediapipe litert-torch-nightly huggingface_hub
+          python -c "import mediapipe.tasks.python.genai.converter as c; print('mediapipe converter OK')"
 
-      - name: Convert gemma4-e2b from HF (default quant)
+      - name: Download gemma4-e2b checkpoint (safetensors)
         run: |
-          # Try converting the HF checkpoint with litert convert (no quant = fp32 baseline too big,
-          # so use INT8 dynamic as the safe default first)
-          litert convert google/gemma-4-E2B \
-            --quantize-recipe dynamic_wi8_afp32 \
-            --output ./out/gemma4-e2b_dynamic_int8 2>&1 | tail -30 || true
-          ls -laR ./out/ 2>/dev/null | head -40
+          huggingface-cli download google/gemma-4-E2B --local-dir ./ckpt 2>&1 | tail -3 || \
+          python -c "
+          from huggingface_hub import snapshot_download
+          p = snapshot_download('google/gemma-4-E2B', local_dir='./ckpt')
+          print('downloaded to', p)
+          "
+          ls -la ./ckpt/ | head -20
 
-      - name: Enumerate and run all quantize recipes
+      - name: Convert with mediapipe converter - INT4 weight-only (official default)
         run: |
           mkdir -p out
-          # The base model .tflite (converted above, or from official repo if convert produced litertlm)
-          BASE=$(find out -name "*.tflite" | head -1)
-          echo "BASE=$BASE"
-          if [ -z "$BASE" ]; then
-            echo "no tflite from convert, listing what we have:"
-            find out -type f | head
-            exit 1
-          fi
-          # Run every recipe documented + discovered
-          for recipe in dynamic_wi8_afp32 weight_only_wi8_afp32 weight_only_wi4_afp32; do
-            echo "=== $recipe ==="
-            litert quantize "$BASE" --recipe "$recipe" --output "out/gemma4-e2b_${recipe}.tflite" 2>&1 | tail -8
-          done
-          ls -la out/
+          cat > convert_int4.py <<'EOF'
+          from mediapipe.tasks.python.genai import converter
+          config = converter.ConversionConfig(
+              input_ckpt="./ckpt",
+              ckpt_format="safetensors",
+              model_type="GEMMA_4_E2B",
+              backend="cpu",
+              quantize="weight_only_int4",
+              output_dir="./out/int4",
+          )
+          converter.convert_checkpoint(config)
+          print("INT4 convert done")
+          EOF
+          python convert_int4.py 2>&1 | tail -10
+          ls -la out/int4/ 2>/dev/null | head
 
-      - name: AOT compile all variants for MT6989
+      - name: Convert - INT8 weight-only
         run: |
-          mkdir -p out/aot
-          for f in out/gemma4-e2b_*.tflite; do
-            [ -f "$f" ] || continue
-            base=$(basename "$f" .tflite)
-            echo "=== AOT $base for MT6989 ==="
-            litert compile "$f" --target mt6989 --output "out/aot/${base}_mt6989.tflite" 2>&1 | tail -12 || true
-          done
-          ls -laR out/aot/ 2>/dev/null | head -30
+          cat > convert_int8.py <<'EOF'
+          from mediapipe.tasks.python.genai import converter
+          config = converter.ConversionConfig(
+              input_ckpt="./ckpt",
+              ckpt_format="safetensors",
+              model_type="GEMMA_4_E2B",
+              backend="cpu",
+              quantize="weight_only_int8",
+              output_dir="./out/int8",
+          )
+          converter.convert_checkpoint(config)
+          print("INT8 convert done")
+          EOF
+          python convert_int8.py 2>&1 | tail -10
+          ls -la out/int8/ 2>/dev/null | head
+
+      - name: Convert - FP16 (no quant)
+        run: |
+          cat > convert_fp16.py <<'EOF'
+          from mediapipe.tasks.python.genai import converter
+          config = converter.ConversionConfig(
+              input_ckpt="./ckpt",
+              ckpt_format="safetensors",
+              model_type="GEMMA_4_E2B",
+              backend="cpu",
+              quantize=None,
+              output_dir="./out/fp16",
+          )
+          converter.convert_checkpoint(config)
+          print("FP16 convert done")
+          EOF
+          python convert_fp16.py 2>&1 | tail -10
+          ls -la out/fp16/ 2>/dev/null | head
+
+      - name: List all produced variants
+        run: |
+          echo "=== all outputs ==="
+          find out -type f -exec ls -la {} \; | head -40
+          echo "=== sizes ==="
+          du -sh out/*/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gemma4-e2b-quantized
+          name: gemma4-e2b-variants
           path: out/
