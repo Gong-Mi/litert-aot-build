@@ -1,0 +1,64 @@
+name: build-mediatek-dispatch
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/build-dispatch.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bazelisk + NDK
+        run: |
+          # bazelisk (bazel version manager)
+          curl -sL -o /usr/local/bin/bazelisk https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazelisk
+          ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
+          bazel --version
+          # Android NDK r27 (LiteRT uses ndk from WORKSPACE; check what it needs)
+          echo "NDK needed"
+
+      - name: Clone LiteRT
+        run: |
+          git clone --depth 1 https://github.com/google-ai-edge/LiteRT.git litert
+          cd litert
+          cat .bazelversion 2>/dev/null || echo "no .bazelversion"
+          ls WORKSPACE MODULE.bazel 2>/dev/null
+          grep -rn "android_ndk\|ndk_version\|ndk_r" WORKSPACE .bazelrc 2>/dev/null | head -8
+
+      - name: Configure NDK
+        run: |
+          cd litert
+          # Find required NDK version
+          NDK_VER=$(grep -oE "r[0-9]+[a-z]?" WORKSPACE .bazelrc 2>/dev/null | head -1 || echo "r27")
+          echo "NDK version hint: $NDK_VER"
+          # Download NDK r27 (common default)
+          curl -sL -o ndk.zip "https://dl.google.com/android/repository/android-ndk-r27-linux.zip"
+          unzip -q ndk.zip -d /opt/ndk
+          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
+          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          echo "NDK at: $ANDROID_NDK_HOME"
+
+      - name: Build libLiteRtDispatch_MediaTek.so
+        run: |
+          cd litert
+          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
+          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+          bazel build --config=android_arm64 \
+            //litert/vendors/mediatek/dispatch:dispatch_api_so \
+            2>&1 | tail -30 || true
+          echo "=== find output ==="
+          find bazel-bin -name "libLiteRtDispatch_MediaTek.so" 2>/dev/null | head -5
+
+      - name: Upload dispatch lib
+        uses: actions/upload-artifact@v4
+        with:
+          name: libLiteRtDispatch_MediaTek
+          path: litert/bazel-bin/litert/vendors/mediatek/dispatch/
+          if-no-files-found: warn
