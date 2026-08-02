@@ -27,18 +27,26 @@ jobs:
           cd /tmp && unzip -q ndk27.zip
           /tmp/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++ --version | head -1
 
-      - name: Compile + link with r27 (unified libc++ ABI __1)
+      - name: Compile (r21e, __1 ABI) + link (r27 lld)
         run: |
+          CXX21=/tmp/android-ndk-r21e/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
           CXX27=/tmp/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
           cp rev/libtflite_mtk.so /tmp/
-          # r27 clang + TF2.8 headers; force libc++ ABI namespace __1 (device TFLite uses this)
-          $CXX27 -std=c++17 /tmp/tflite_neuron_bench.cc \
+          # Compile with r21e (TF2.8-era headers) forcing libc++ __1 ABI (device TFLite ABI)
+          $CXX21 -std=c++17 -c /tmp/tflite_neuron_bench.cc \
             -I /tmp/tf28_src/tensorflow-2.8.0 -I /tmp/hdrs \
             -D_LIBCPP_ABI_NAMESPACE=__1 \
+            -o /tmp/tflite_neuron_bench.o 2>&1 | head -15
+          echo "COMPILE=$?"
+          ls -la /tmp/tflite_neuron_bench.o 2>/dev/null
+          # Check ABI namespace of produced object
+          readelf -Ws /tmp/tflite_neuron_bench.o 2>/dev/null | grep -oE "_ZNSt3__ndk1|_ZNSt3__1" | sort | uniq -c | head -3
+          # Link with r27 lld (handles .relr.dyn)
+          $CXX27 -std=c++17 /tmp/tflite_neuron_bench.o \
             -L/tmp -l:libtflite_mtk.so -llog \
             -Wl,-rpath,/data/local/tmp \
             -o /tmp/tflite_neuron_bench 2>&1 | head -15
-          echo "BUILD=$?"
+          echo "LINK=$?"
           ls -la /tmp/tflite_neuron_bench 2>/dev/null && file /tmp/tflite_neuron_bench
 
       - name: Upload binary
