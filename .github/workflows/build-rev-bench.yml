@@ -18,22 +18,32 @@ jobs:
           tar xzf rev/rev_bench.tar.gz -C /tmp
           ls /tmp/tflite_neuron_bench.cc /tmp/hdrs/flatbuffers/flatbuffers.h 2>/dev/null
 
-      - name: Install NDK r21e (clang 12, TF2.8-era)
+      - name: Install NDK r21e (clang 12 compile) + r27 (new lld link)
         run: |
           curl -sL -o /tmp/ndk.zip "https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip"
           cd /tmp && unzip -q ndk.zip
           /tmp/android-ndk-r21e/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ --version | head -1
+          curl -sL -o /tmp/ndk27.zip "https://dl.google.com/android/repository/android-ndk-r27-linux.zip"
+          cd /tmp && unzip -q ndk27.zip
+          /tmp/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++ --version | head -1
 
-      - name: Compile + link with r21e clang 12
+      - name: Compile (r21e) + link (r27 lld)
         run: |
-          CXX=/tmp/android-ndk-r21e/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
+          CXX21=/tmp/android-ndk-r21e/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
+          CXX27=/tmp/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
           cp rev/libtflite_mtk.so /tmp/
-          $CXX -std=c++17 /tmp/tflite_neuron_bench.cc \
+          # Compile with r21e (TF2.8-era headers) to .o
+          $CXX21 -std=c++17 -c /tmp/tflite_neuron_bench.cc \
             -I /tmp/tf28_src/tensorflow-2.8.0 -I /tmp/hdrs \
+            -o /tmp/tflite_neuron_bench.o 2>&1 | head -15
+          echo "COMPILE=$?"
+          ls -la /tmp/tflite_neuron_bench.o 2>/dev/null
+          # Link with r27 (handles .relr.dyn sections in Android16 libtflite_mtk.so)
+          $CXX27 -std=c++17 /tmp/tflite_neuron_bench.o \
             -L/tmp -l:libtflite_mtk.so -llog \
             -Wl,-rpath,/data/local/tmp \
-            -o /tmp/tflite_neuron_bench 2>&1 | head -20
-          echo "=== result ==="
+            -o /tmp/tflite_neuron_bench 2>&1 | head -15
+          echo "LINK=$?"
           ls -la /tmp/tflite_neuron_bench 2>/dev/null && file /tmp/tflite_neuron_bench
 
       - name: Upload binary
