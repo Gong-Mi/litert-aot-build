@@ -16,10 +16,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install litert-torch + SDKs
+      - name: Install litert-torch + SDKs + CLI
         run: |
-          pip install -U ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly litert-torch-nightly
+          pip install -U ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly litert-torch-nightly litert-cli-nightly
           python -c "import litert_torch; print('litert_torch OK')"
+          litert --help 2>&1 | head -10 || true
 
       - name: Predownload model (resumable, shared across recipes)
         run: |
@@ -39,30 +40,82 @@ jobs:
           python -m litert_torch.generative.export_hf \
             --model ./ckpt \
             --output_dir ./out/dynamic_int8 \
-            --quantization_recipe dynamic_wi8_afp32 \
-            --aot_soc_model MT6989 2>&1 | tail -20
-          echo "=== output ==="
-          find ./out/dynamic_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
+            --quantization_recipe dynamic_wi8_afp32 2>&1 | tail -15
+          ls -la ./out/dynamic_int8/ 2>/dev/null
 
       - name: Export - weight-only INT8
         run: |
           python -m litert_torch.generative.export_hf \
             --model ./ckpt \
             --output_dir ./out/weight_only_int8 \
-            --quantization_recipe weight_only_wi8_afp32 \
-            --aot_soc_model MT6989 2>&1 | tail -20
-          echo "=== output ==="
-          find ./out/weight_only_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
+            --quantization_recipe weight_only_wi8_afp32 2>&1 | tail -15
+          ls -la ./out/weight_only_int8/ 2>/dev/null
 
       - name: Export - weight-only INT4
         run: |
           python -m litert_torch.generative.export_hf \
             --model ./ckpt \
             --output_dir ./out/weight_only_int4 \
-            --quantization_recipe weight_only_wi4_afp32 \
-            --aot_soc_model MT6989 2>&1 | tail -20
-          echo "=== output ==="
-          find ./out/weight_only_int4 -type f -exec ls -la {} \; 2>/dev/null | head -10
+            --quantization_recipe weight_only_wi4_afp32 2>&1 | tail -15
+          ls -la ./out/weight_only_int4/ 2>/dev/null
+
+      - name: Extract TFLite from litertlm + AOT compile for MT6989
+        run: |
+          pip install -U litert-lm-builder 2>&1 | tail -1
+          mkdir -p out/aot
+          python - <<'EOF'
+          import io, os
+          from litert_lm_builder import litertlm_peek
+
+          variants = ['dynamic_int8', 'weight_only_int8', 'weight_only_int4']
+          for v in variants:
+              src = f'out/{v}/model.litertlm'
+              if not os.path.exists(src):
+                  print(f'!! {v}: litertlm not found')
+                  continue
+              dumpdir = f'out/extracted/{v}'
+              os.makedirs(dumpdir, exist_ok=True)
+              litertlm_peek.peek_litertlm_file(src, dump_files_dir=dumpdir, output_stream=io.StringIO())
+              # find the tflite
+              tfl = None
+              for r, ds, fs in os.walk(dumpdir):
+                  for f in fs:
+                      if f.endswith('.tflite'):
+                          tfl = os.path.join(r, f)
+              if not tfl:
+                  print(f'!! {v}: no tflite extracted')
+                  continue
+              dst = f'out/extracted/{v}/model.tflite'
+              os.rename(tfl, dst)
+              print(f'{v}: extracted tflite {os.path.getsize(dst)} bytes -> {dst}')
+          EOF
+
+      - name: AOT compile each variant for MT6989
+        run: |
+          ls -laR out/extracted/ 2>/dev/null | head -20
+          for v in dynamic_int8 weight_only_int8 weight_only_int4; do
+            tfl="out/extracted/$v/model.tflite"
+            if [ ! -f "$tfl" ]; then echo "!! $v: no tflite"; continue; fi
+            echo "=== AOT compile $v for MT6989 ==="
+            litert compile "$tfl" --target mt6989 --output "out/aot/${v}_mt6989.tflite" 2>&1 | tail -15 || true
+          done
+          echo "=== AOT results ==="
+          ls -la out/aot/ 2>/dev/null
+
+      - name: Verify AOT bytecode in outputs
+        run: |
+          python - <<'EOF'
+          import os
+          for v in ['dynamic_int8', 'weight_only_int8', 'weight_only_int4']:
+              p = f'out/aot/{v}_mt6989.tflite'
+              if not os.path.exists(p):
+                  print(f'{v}: MISSING')
+                  continue
+              data = open(p, 'rb').read()
+              markers = {s: data.find(s) for s in [b'MT6989', b'NeuroPilot', b'neuron', b'MDLA', b'bytecode']}
+              found = {k: v2 for k, v2 in markers.items() if v2 != -1}
+              print(f'{v}: {len(data)} bytes | markers: {found if found else "NONE"}')
+          EOF
 
       - name: Summary
         run: |
