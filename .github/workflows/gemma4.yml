@@ -1,4 +1,4 @@
-name: gemma4-e2b-quantize-aot
+name: gemma3-1b-quantize-aot
 
 on:
   workflow_dispatch:
@@ -20,35 +20,34 @@ jobs:
         run: |
           pip install -U ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly litert-torch-nightly
           python -c "import litert_torch; print('litert_torch OK')"
-          python -m litert_torch.generative.export_hf --help 2>&1 | head -50 || true
 
-      - name: Export gemma4-e2b - dynamic INT8 (default recipe)
+      - name: Export gemma3-1b-it - dynamic INT8 (default recipe)
         run: |
           python -m litert_torch.generative.export_hf \
-            --model google/gemma-4-E2B \
+            --model unsloth/gemma-3-1b-it \
             --output_dir ./out/dynamic_int8 \
             --quantization_recipe dynamic_wi8_afp32 \
-            --aot_soc_model MT6989 2>&1 | tail -25
+            --aot_soc_model MT6989 2>&1 | tail -20
           echo "=== output ==="
           find ./out/dynamic_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
-      - name: Export gemma4-e2b - weight-only INT8
+      - name: Export gemma3-1b-it - weight-only INT8
         run: |
           python -m litert_torch.generative.export_hf \
-            --model google/gemma-4-E2B \
+            --model unsloth/gemma-3-1b-it \
             --output_dir ./out/weight_only_int8 \
             --quantization_recipe weight_only_wi8_afp32 \
-            --aot_soc_model MT6989 2>&1 | tail -25
+            --aot_soc_model MT6989 2>&1 | tail -20
           echo "=== output ==="
           find ./out/weight_only_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
-      - name: Export gemma4-e2b - weight-only INT4
+      - name: Export gemma3-1b-it - weight-only INT4
         run: |
           python -m litert_torch.generative.export_hf \
-            --model google/gemma-4-E2B \
+            --model unsloth/gemma-3-1b-it \
             --output_dir ./out/weight_only_int4 \
             --quantization_recipe weight_only_wi4_afp32 \
-            --aot_soc_model MT6989 2>&1 | tail -25
+            --aot_soc_model MT6989 2>&1 | tail -20
           echo "=== output ==="
           find ./out/weight_only_int4 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
@@ -62,5 +61,5 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gemma4-e2b-variants
+          name: gemma3-1b-variants
           path: out/
