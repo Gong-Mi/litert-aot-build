@@ -29,6 +29,9 @@ jobs:
           cd mtkdelegate
           cat .bazelversion 2>/dev/null || echo "no .bazelversion"
           cat WORKSPACE | head -30
+          # Pin SDK path in WORKSPACE so android_sdk_repository finds our stub
+          sed -i 's|    api_level = 28,|    api_level = 28,\n    path = "/opt/android-sdk",|' WORKSPACE
+          grep -A3 "name = \"androidsdk\"" WORKSPACE | head -5
 
       - name: Configure NDK + SDK
         run: |
