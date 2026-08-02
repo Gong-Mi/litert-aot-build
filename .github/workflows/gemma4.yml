@@ -90,38 +90,55 @@ jobs:
               print(f'{v}: extracted tflite {os.path.getsize(dst)} bytes -> {dst}')
           EOF
 
-      - name: AOT compile each variant for MT6989
+      - name: AOT compile each variant for MT6989 (Python API - MediaTek)
         run: |
-          ls -laR out/extracted/ 2>/dev/null | head -20
           for v in dynamic_int8 weight_only_int8 weight_only_int4; do
             tfl="out/extracted/$v/model.tflite"
             if [ ! -f "$tfl" ]; then echo "!! $v: no tflite"; continue; fi
             echo "=== AOT compile $v for MT6989 ==="
-            mkdir -p "out/aot/$v"
-            litert compile "$tfl" --target mt6989 --output-dir "out/aot/$v" 2>&1 | tail -15 || true
-            ls -la "out/aot/$v/" 2>/dev/null
+            python - <<EOF
+            import traceback
+            from ai_edge_litert.aot import aot_compile as aot_lib
+            from ai_edge_litert.aot.vendors.mediatek import target as mtk_target
+            target = mtk_target.Target(mtk_target.SocModel.MT6989)
+            print("Target:", target, "| NP:", target.recommended_np_version)
+            try:
+                compiled = aot_lib.aot_compile(
+                    "$tfl",
+                    target=target,
+                    keep_going=True,
+                )
+                print("AOT COMPILE OK")
+            except Exception:
+                traceback.print_exc()
+            EOF
+            ls -la out/extracted/$v/_compiled_models/ 2>/dev/null
           done
           echo "=== AOT results ==="
-          find out/aot -type f -exec ls -la {} \; 2>/dev/null
+          find out/extracted -name "*_compiled_models*" -o -name "*apply_plugin*" 2>/dev/null | head -20
 
       - name: Verify AOT bytecode in outputs
         run: |
           python - <<'EOF'
           import os
           for v in ['dynamic_int8', 'weight_only_int8', 'weight_only_int4']:
-              d = f'out/aot/{v}'
+              d = f'out/extracted/{v}/_compiled_models'
               if not os.path.isdir(d):
-                  print(f'{v}: NO OUTPUT DIR')
+                  print(f'{v}: NO OUTPUT DIR {d}')
                   continue
               files = [f for f in os.listdir(d) if f.endswith('.tflite')]
               if not files:
                   print(f'{v}: no tflite in {d} -> {os.listdir(d)}')
                   continue
               p = os.path.join(d, files[0])
+              sz = os.path.getsize(p)
+              if sz == 0:
+                  print(f'{v}: EMPTY FILE {files[0]}')
+                  continue
               data = open(p, 'rb').read()
               markers = {s: data.find(s) for s in [b'MT6989', b'NeuroPilot', b'neuron', b'MDLA', b'bytecode']}
               found = {k: v2 for k, v2 in markers.items() if v2 != -1}
-              print(f'{v}: {files[0]} {len(data)} bytes | markers: {found if found else "NONE"}')
+              print(f'{v}: {files[0]} {sz} bytes | markers: {found if found else "NONE"}')
           EOF
 
       - name: Summary
