@@ -92,12 +92,27 @@ jobs:
 
       - name: AOT compile each variant for MT6989 (Python API - MediaTek)
         run: |
+          echo "=== SDK data check ==="
+          python3 - <<'PYEOF'
+          import ai_edge_litert_sdk_mediatek as sdk
+          p = sdk.get_sdk_path()
+          print("sdk path:", p)
+          if p:
+              import os
+              for r, ds, fs in os.walk(p):
+                  for f in fs:
+                      if f.endswith('.so') or 'compiler' in f or 'nnal' in f:
+                          print(" ", os.path.join(r, f))
+          PYEOF
           for v in dynamic_int8 weight_only_int8 weight_only_int4; do
             tfl="out/extracted/$v/model.tflite"
             if [ ! -f "$tfl" ]; then echo "!! $v: no tflite"; continue; fi
             echo "=== AOT compile $v for MT6989 ==="
             python3 aot_compile_mediatek.py "$tfl" MT6989 || true
             ls -la "out/extracted/$v/_compiled_models/" 2>/dev/null || true
+            echo "--- apply_plugin error (if any) ---"
+            cat /tmp/tmp*.error 2>/dev/null | head -20 || true
+            rm -f /tmp/tmp*.error 2>/dev/null || true
           done
           echo "=== AOT results ==="
           find out/extracted -name "*apply_plugin*" 2>/dev/null | head -10
