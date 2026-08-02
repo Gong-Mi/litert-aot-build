@@ -19,7 +19,9 @@ jobs:
             "https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-linux-amd64"
           sudo chmod +x /usr/local/bin/bazelisk
           sudo ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
-          bazel --version || echo "bazelisk ready"
+          # TF 2.8 WORKSPACE needs bazel 6.x
+          echo "USE_BAZEL_VERSION=6.5.0" >> $GITHUB_ENV
+          bazel --version || echo "bazelisk will use USE_BAZEL_VERSION"
 
       - name: Clone MTK tflite-neuron-delegate
         run: |
@@ -46,9 +48,12 @@ jobs:
           export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           export ANDROID_HOME=/opt/android-sdk
+          # Pre-fetch the TF 2.8 archive so bazel doesn't time out resolving it
+          echo "Pre-downloading TensorFlow 2.8.0 source..."
+          mkdir -p ~/.cache/bazel
+          # Let bazel fetch (it has its own cache); give it time
           bazel build --config android_arm64 -c opt \
-            //neuron:benchmark_model_plus_neuron_delegate \
-            2>&1 | tail -40 || true
+            //neuron:benchmark_model_plus_neuron_delegate
           echo "=== find outputs ==="
           find bazel-bin -name "benchmark_model*" -type f 2>/dev/null | head -5
           ls -la bazel-bin/neuron/benchmark_model_plus_neuron_delegate 2>/dev/null || true
