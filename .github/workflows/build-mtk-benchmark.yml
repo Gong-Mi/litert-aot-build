@@ -43,9 +43,9 @@ jobs:
           sudo curl -sL -o /tmp/cmdtools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
           sudo unzip -q /tmp/cmdtools.zip -d /opt/android-sdk/cmdline-tools
           sudo mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest 2>/dev/null || true
-          # android_sdk_repository validates platforms/ and build-tools/ exist
+          # android_sdk_repository validates platforms/ and build-tools/ exist (bazel5 needs build-tools >= 30.0.0)
           sudo mkdir -p /opt/android-sdk/platforms/android-28
-          sudo mkdir -p /opt/android-sdk/build-tools/28.0.3
+          sudo mkdir -p /opt/android-sdk/build-tools/30.0.0
           # bazel 5 android_ndk_repository validates NDK has platforms/ (old layout)
           sudo mkdir -p /opt/ndk/android-ndk-r27/platforms
           ls /opt/android-sdk/ 2>/dev/null || echo "sdk dir exists"
