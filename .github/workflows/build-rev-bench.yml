@@ -1,0 +1,44 @@
+name: build-rev-bench
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/build-rev-bench.yml', 'rev/**']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract headers + source
+        run: |
+          tar xzf rev/rev_bench.tar.gz -C /tmp
+          ls /tmp/tflite_neuron_bench.cc /tmp/hdrs/flatbuffers/flatbuffers.h 2>/dev/null
+
+      - name: Install NDK r21e (clang 12, TF2.8-era)
+        run: |
+          curl -sL -o /tmp/ndk.zip "https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip"
+          cd /tmp && unzip -q ndk.zip
+          /tmp/android-ndk-r21e/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ --version | head -1
+
+      - name: Compile + link with r21e clang 12
+        run: |
+          CXX=/tmp/android-ndk-r21e/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
+          cp rev/libtflite_mtk.so /tmp/
+          $CXX -std=c++17 /tmp/tflite_neuron_bench.cc \
+            -I /tmp/tf28_src/tensorflow-2.8.0 -I /tmp/hdrs \
+            -L/tmp -l:libtflite_mtk.so -llog \
+            -Wl,-rpath,/data/local/tmp \
+            -o /tmp/tflite_neuron_bench 2>&1 | head -20
+          echo "=== result ==="
+          ls -la /tmp/tflite_neuron_bench 2>/dev/null && file /tmp/tflite_neuron_bench
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rev-bench-binary
+          path: /tmp/tflite_neuron_bench
+          if-no-files-found: warn
