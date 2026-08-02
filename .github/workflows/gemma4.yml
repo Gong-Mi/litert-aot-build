@@ -21,30 +21,43 @@ jobs:
           pip install -U ai-edge-litert-nightly ai-edge-litert-sdk-mediatek-nightly litert-torch-nightly
           python -c "import litert_torch; print('litert_torch OK')"
 
-      - name: Export gemma3-1b-it - dynamic INT8 (default recipe)
+      - name: Predownload model (resumable, shared across recipes)
+        run: |
+          python - <<'EOF'
+          from huggingface_hub import snapshot_download
+          p = snapshot_download(
+              "unsloth/gemma-3-1b-it",
+              local_dir="./ckpt",
+              max_workers=4,
+          )
+          print("downloaded to", p)
+          EOF
+          ls -la ./ckpt/ | head
+
+      - name: Export - dynamic INT8 (default recipe)
         run: |
           python -m litert_torch.generative.export_hf \
-            --model unsloth/gemma-3-1b-it \
+            --model ./ckpt \
             --output_dir ./out/dynamic_int8 \
             --quantization_recipe dynamic_wi8_afp32 \
             --aot_soc_model MT6989 2>&1 | tail -20
           echo "=== output ==="
           find ./out/dynamic_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
-      - name: Export gemma3-1b-it - weight-only INT8
+      - name: Export - weight-only INT8
         run: |
           python -m litert_torch.generative.export_hf \
-            --model unsloth/gemma-3-1b-it \
+            --model ./ckpt \
             --output_dir ./out/weight_only_int8 \
             --quantization_recipe weight_only_wi8_afp32 \
             --aot_soc_model MT6989 2>&1 | tail -20
           echo "=== output ==="
           find ./out/weight_only_int8 -type f -exec ls -la {} \; 2>/dev/null | head -10
 
-      - name: Export gemma3-1b-it - weight-only INT4
+      - name: Export - weight-only INT4
         run: |
           python -m litert_torch.generative.export_hf \
-            --model unsloth/gemma-3-1b-it \
+            --model ./ckpt \
             --output_dir ./out/weight_only_int4 \
             --quantization_recipe weight_only_wi4_afp32 \
             --aot_soc_model MT6989 2>&1 | tail -20
