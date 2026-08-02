@@ -97,24 +97,31 @@ jobs:
             tfl="out/extracted/$v/model.tflite"
             if [ ! -f "$tfl" ]; then echo "!! $v: no tflite"; continue; fi
             echo "=== AOT compile $v for MT6989 ==="
-            litert compile "$tfl" --target mt6989 --output "out/aot/${v}_mt6989.tflite" 2>&1 | tail -15 || true
+            mkdir -p "out/aot/$v"
+            litert compile "$tfl" --target mt6989 --output-dir "out/aot/$v" 2>&1 | tail -15 || true
+            ls -la "out/aot/$v/" 2>/dev/null
           done
           echo "=== AOT results ==="
-          ls -la out/aot/ 2>/dev/null
+          find out/aot -type f -exec ls -la {} \; 2>/dev/null
 
       - name: Verify AOT bytecode in outputs
         run: |
           python - <<'EOF'
           import os
           for v in ['dynamic_int8', 'weight_only_int8', 'weight_only_int4']:
-              p = f'out/aot/{v}_mt6989.tflite'
-              if not os.path.exists(p):
-                  print(f'{v}: MISSING')
+              d = f'out/aot/{v}'
+              if not os.path.isdir(d):
+                  print(f'{v}: NO OUTPUT DIR')
                   continue
+              files = [f for f in os.listdir(d) if f.endswith('.tflite')]
+              if not files:
+                  print(f'{v}: no tflite in {d} -> {os.listdir(d)}')
+                  continue
+              p = os.path.join(d, files[0])
               data = open(p, 'rb').read()
               markers = {s: data.find(s) for s in [b'MT6989', b'NeuroPilot', b'neuron', b'MDLA', b'bytecode']}
               found = {k: v2 for k, v2 in markers.items() if v2 != -1}
-              print(f'{v}: {len(data)} bytes | markers: {found if found else "NONE"}')
+              print(f'{v}: {files[0]} {len(data)} bytes | markers: {found if found else "NONE"}')
           EOF
 
       - name: Summary
