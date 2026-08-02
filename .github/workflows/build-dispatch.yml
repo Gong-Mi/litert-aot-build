@@ -28,8 +28,8 @@ jobs:
           git clone --depth 1 https://github.com/google-ai-edge/LiteRT.git litert
           cd litert
           cat .bazelversion 2>/dev/null || echo "no .bazelversion"
-          ls WORKSPACE MODULE.bazel 2>/dev/null
-          grep -rn "android_ndk\|ndk_version\|ndk_r" WORKSPACE .bazelrc 2>/dev/null | head -8
+          ls WORKSPACE 2>/dev/null || true
+          grep -rn "android_ndk\|ndk_version\|ndk_r" WORKSPACE .bazelrc 2>/dev/null | head -8 || true
 
       - name: Configure NDK
         run: |
