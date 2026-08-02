@@ -13,15 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install bazelisk + NDK
+      - name: Install bazelisk
         run: |
-          # bazelisk (bazel version manager)
-          curl -sL -o /usr/local/bin/bazelisk https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          # Fixed-version bazelisk (latest/download redirect can 404)
+          curl -sL -o /usr/local/bin/bazelisk \
+            "https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-linux-amd64"
           chmod +x /usr/local/bin/bazelisk
           ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
-          bazel --version
-          # Android NDK r27 (LiteRT uses ndk from WORKSPACE; check what it needs)
-          echo "NDK needed"
+          file /usr/local/bin/bazelisk
+          bazel --version || echo "bazelisk needs USE_BAZEL_VERSION"
 
       - name: Clone LiteRT
         run: |
