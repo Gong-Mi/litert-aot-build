@@ -1,0 +1,61 @@
+name: build-mtk-benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/build-mtk-benchmark.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bazelisk
+        run: |
+          sudo curl -sL -o /usr/local/bin/bazelisk \
+            "https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-linux-amd64"
+          sudo chmod +x /usr/local/bin/bazelisk
+          sudo ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
+          bazel --version || echo "bazelisk ready"
+
+      - name: Clone MTK tflite-neuron-delegate
+        run: |
+          git clone --depth 1 https://github.com/MediaTek-NeuroPilot/tflite-neuron-delegate.git mtkdelegate
+          cd mtkdelegate
+          cat .bazelversion 2>/dev/null || echo "no .bazelversion"
+          cat WORKSPACE | head -30
+
+      - name: Configure NDK
+        run: |
+          sudo curl -sL -o ndk.zip "https://dl.google.com/android/repository/android-ndk-r27-linux.zip"
+          sudo mkdir -p /opt/ndk
+          sudo unzip -q ndk.zip -d /opt/ndk
+          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
+          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+          export ANDROID_HOME=/opt/android-sdk
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+
+      - name: Build benchmark_model + neuron delegate (android_arm64)
+        run: |
+          cd mtkdelegate
+          export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
+          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+          export ANDROID_HOME=/opt/android-sdk
+          bazel build --config android_arm64 -c opt \
+            //neuron:benchmark_model_plus_neuron_delegate \
+            2>&1 | tail -40 || true
+          echo "=== find outputs ==="
+          find bazel-bin -name "benchmark_model*" -type f 2>/dev/null | head -5
+          ls -la bazel-bin/neuron/benchmark_model_plus_neuron_delegate 2>/dev/null || true
+
+      - name: Upload benchmark binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtk-benchmark-model
+          path: mtkdelegate/bazel-bin/neuron/benchmark_model_plus_neuron_delegate
+          if-no-files-found: warn
