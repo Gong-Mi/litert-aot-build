@@ -19,8 +19,8 @@ jobs:
             "https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-linux-amd64"
           sudo chmod +x /usr/local/bin/bazelisk
           sudo ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
-          # TF 2.8 WORKSPACE needs bazel 6.x
-          echo "USE_BAZEL_VERSION=6.5.0" >> $GITHUB_ENV
+          # TF 2.8 WORKSPACE needs bazel 5.x (bazel 6 removed @bazel_tools//platforms)
+          echo "USE_BAZEL_VERSION=5.4.1" >> $GITHUB_ENV
           bazel --version || echo "bazelisk will use USE_BAZEL_VERSION"
 
       - name: Clone MTK tflite-neuron-delegate
