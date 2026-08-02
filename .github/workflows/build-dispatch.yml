@@ -46,20 +46,23 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
           echo "NDK at: $ANDROID_NDK_HOME"
 
-      - name: Build libLiteRtDispatch_MediaTek.so
+      - name: Build libLiteRt.so + libLiteRtDispatch_MediaTek.so (matched versions)
         run: |
           cd litert
           export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           bazel build --config=android_arm64 \
+            //litert/c:litert_runtime_c_api_so \
             //litert/vendors/mediatek/dispatch:dispatch_api_so \
             2>&1 | tail -30 || true
-          echo "=== find output ==="
-          find bazel-bin -name "libLiteRtDispatch_MediaTek.so" 2>/dev/null | head -5
+          echo "=== find outputs ==="
+          find bazel-bin -name "libLiteRt*.so" 2>/dev/null | head -10
 
       - name: Upload dispatch lib
         uses: actions/upload-artifact@v4
         with:
-          name: libLiteRtDispatch_MediaTek
-          path: litert/bazel-bin/litert/vendors/mediatek/dispatch/
+          name: litert-mtk-dispatch
+          path: |
+            litert/bazel-bin/litert/c/libliteRt.so
+            litert/bazel-bin/litert/vendors/mediatek/dispatch/
           if-no-files-found: warn
