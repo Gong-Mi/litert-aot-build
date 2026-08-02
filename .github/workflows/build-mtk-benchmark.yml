@@ -30,11 +30,17 @@ jobs:
           cat .bazelversion 2>/dev/null || echo "no .bazelversion"
           cat WORKSPACE | head -30
 
-      - name: Configure NDK
+      - name: Configure NDK + SDK
         run: |
           sudo curl -sL -o ndk.zip "https://dl.google.com/android/repository/android-ndk-r27-linux.zip"
           sudo mkdir -p /opt/ndk
           sudo unzip -q ndk.zip -d /opt/ndk
+          # Minimal Android SDK (cmdline-tools only; WORKSPACE android_sdk_repository just needs the path)
+          sudo mkdir -p /opt/android-sdk/cmdline-tools
+          sudo curl -sL -o /tmp/cmdtools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          sudo unzip -q /tmp/cmdtools.zip -d /opt/android-sdk/cmdline-tools
+          sudo mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest 2>/dev/null || true
+          ls /opt/android-sdk/cmdline-tools/ 2>/dev/null || echo "sdk dir exists"
           export ANDROID_NDK_HOME=/opt/ndk/android-ndk-r27
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           export ANDROID_HOME=/opt/android-sdk
