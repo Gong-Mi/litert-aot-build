@@ -57,12 +57,17 @@ jobs:
             2>&1 | tail -30 || true
           echo "=== find outputs ==="
           find bazel-bin -name "libLiteRt.so" -o -name "libLiteRtDispatch_MediaTek.so" 2>/dev/null | head -10
+          # Also search the whole bazel output tree (cc_shared_library may put it elsewhere)
+          find bazel-out -name "libLiteRt.so" 2>/dev/null | head -5
+          # Collect everything into a staging dir
+          mkdir -p /tmp/out
+          find bazel-bin bazel-out -name "libLiteRt.so" -exec cp {} /tmp/out/ \; 2>/dev/null
+          find bazel-bin -name "libLiteRtDispatch_MediaTek.so" -exec cp {} /tmp/out/ \; 2>/dev/null
+          ls -la /tmp/out/
 
       - name: Upload dispatch lib
         uses: actions/upload-artifact@v4
         with:
           name: litert-mtk-dispatch
-          path: |
-            litert/bazel-bin/litert/c/litert_runtime_c_api_so/libLiteRt.so
-            litert/bazel-bin/litert/vendors/mediatek/dispatch/libLiteRtDispatch_MediaTek.so
+          path: /tmp/out/
           if-no-files-found: warn
